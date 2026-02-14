@@ -2,6 +2,11 @@ const Content = require("../models/Content");
 const mongoose = require("mongoose");
 const { GridFSBucket, ObjectId } = require("mongodb");
 
+// ALWAYS force https for public URL
+function getBaseUrl(req) {
+  return `https://${req.headers.host}`;
+}
+
 exports.getContent = async (req, res) => {
   try {
     const content = await Content.findOne({ linkId: req.params.linkId });
@@ -18,15 +23,18 @@ exports.getContent = async (req, res) => {
       });
     }
 
+    const base = getBaseUrl(req);
+
     return res.json({
       type: "file",
       fileName: content.originalName,
-      previewUrl: `${process.env.BASE_URL}/content/${content.linkId}/preview`,
-      downloadUrl: `${process.env.BASE_URL}/content/${content.linkId}/download`,
+      previewUrl: `${base}/content/${content.linkId}/preview`,
+      downloadUrl: `${base}/content/${content.linkId}/download`,
       expiresAt: content.expiresAt,
     });
-  } catch {
-    res.status(500).json({ error: "Fetch failed" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch content" });
   }
 };
 
@@ -42,7 +50,7 @@ exports.previewFile = async (req, res) => {
 
     const stream = bucket.openDownloadStream(new ObjectId(content.filePath));
 
-    // Set generic content type (browser can preview)
+    // Let browser render PDF/images automatically
     res.setHeader("Content-Type", "application/octet-stream");
 
     stream.on("error", () => res.status(404).send("File not found"));
@@ -51,7 +59,6 @@ exports.previewFile = async (req, res) => {
     res.status(500).send("Preview failed");
   }
 };
-
 
 exports.downloadFile = async (req, res) => {
   try {
@@ -77,4 +84,3 @@ exports.downloadFile = async (req, res) => {
     res.status(500).send("Download failed");
   }
 };
-
