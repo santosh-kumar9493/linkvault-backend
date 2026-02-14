@@ -2,7 +2,6 @@ const Content = require("../models/Content");
 const mongoose = require("mongoose");
 const { GridFSBucket, ObjectId } = require("mongodb");
 
-// ALWAYS force https for public URL
 function getBaseUrl(req) {
   return `https://${req.headers.host}`;
 }
@@ -48,14 +47,27 @@ exports.previewFile = async (req, res) => {
       bucketName: "uploads",
     });
 
-    const stream = bucket.openDownloadStream(new ObjectId(content.filePath));
+    const fileDoc = await mongoose.connection.db
+      .collection("uploads.files")
+      .findOne({ _id: new ObjectId(content.filePath) });
 
-    // Let browser render PDF/images automatically
-    res.setHeader("Content-Type", "application/octet-stream");
+    const mimeType =
+      fileDoc?.contentType ||
+      (content.originalName.endsWith(".pdf")
+        ? "application/pdf"
+        : content.originalName.match(/\.(png|jpg|jpeg|gif)$/i)
+        ? "image/jpeg"
+        : "text/plain");
+
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader("Content-Disposition", "inline");
+
+    const stream = bucket.openDownloadStream(new ObjectId(content.filePath));
 
     stream.on("error", () => res.status(404).send("File not found"));
     stream.pipe(res);
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.status(500).send("Preview failed");
   }
 };
@@ -70,7 +82,6 @@ exports.downloadFile = async (req, res) => {
       "Content-Disposition",
       `attachment; filename="${content.originalName}"`
     );
-    res.setHeader("Content-Type", "application/octet-stream");
 
     const bucket = new GridFSBucket(mongoose.connection.db, {
       bucketName: "uploads",
@@ -80,7 +91,8 @@ exports.downloadFile = async (req, res) => {
 
     stream.on("error", () => res.status(404).send("File not found"));
     stream.pipe(res);
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.status(500).send("Download failed");
   }
 };
