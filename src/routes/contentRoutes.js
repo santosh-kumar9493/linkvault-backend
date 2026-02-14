@@ -1,10 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const contentController = require("../controllers/contentController");
+const {
+  getContent,
+  previewFile,
+  downloadFile,
+} = require("../controllers/contentController");
 
-router.get("/:linkId", contentController.getContent);
-router.get("/:linkId/preview", contentController.previewFile);
-router.get("/:linkId/download", contentController.downloadFile);
+router.get("/:linkId", getContent);
+router.get("/:linkId/preview", previewFile);
+router.get("/:linkId/download", downloadFile);
 
 module.exports = router;

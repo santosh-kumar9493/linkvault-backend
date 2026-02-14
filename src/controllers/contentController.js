@@ -15,19 +15,20 @@ exports.getContent = async (req, res) => {
     if (new Date() > content.expiresAt)
       return res.status(410).json({ error: "Link expired" });
 
-    // password
+    // Password check
     if (content.passwordHash) {
-      const p = req.headers["x-link-password"];
-      if (!p) return res.status(401).json({ passwordRequired: true });
-      const ok = await bcrypt.compare(p, content.passwordHash);
+      const provided = req.headers["x-link-password"];
+      if (!provided) return res.status(401).json({ passwordRequired: true });
+
+      const ok = await bcrypt.compare(provided, content.passwordHash);
       if (!ok) return res.status(403).json({ error: "Wrong password" });
     }
 
-    // increase view count
+    // Increase view count
     content.viewCount += 1;
     await content.save();
 
-    // one-time view
+    // One-time view → delete after first read
     if (content.oneTimeView && content.viewCount > 1) {
       await Content.deleteOne({ _id: content._id });
       return res.status(410).json({ error: "Link expired" });
@@ -52,7 +53,65 @@ exports.getContent = async (req, res) => {
       expiresAt: content.expiresAt,
       views: content.viewCount,
     });
-  } catch (e) {
-    res.status(500).json({ error: "Failed" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch content" });
+  }
+};
+
+exports.previewFile = async (req, res) => {
+  try {
+    const content = await Content.findOne({ linkId: req.params.linkId });
+
+    if (!content || new Date() > content.expiresAt)
+      return res.status(410).send("Link expired");
+
+    const bucket = new GridFSBucket(mongoose.connection.db, {
+      bucketName: "uploads",
+    });
+
+    const fileDoc = await mongoose.connection.db
+      .collection("uploads.files")
+      .findOne({ _id: new ObjectId(content.filePath) });
+
+    res.setHeader(
+      "Content-Type",
+      fileDoc?.contentType || "application/octet-stream"
+    );
+    res.setHeader("Content-Disposition", "inline");
+
+    bucket
+      .openDownloadStream(new ObjectId(content.filePath))
+      .on("error", () => res.status(404).send("File not found"))
+      .pipe(res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Preview failed");
+  }
+};
+
+exports.downloadFile = async (req, res) => {
+  try {
+    const content = await Content.findOne({ linkId: req.params.linkId });
+
+    if (!content || new Date() > content.expiresAt)
+      return res.status(410).send("Link expired");
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${content.originalName}"`
+    );
+
+    const bucket = new GridFSBucket(mongoose.connection.db, {
+      bucketName: "uploads",
+    });
+
+    bucket
+      .openDownloadStream(new ObjectId(content.filePath))
+      .on("error", () => res.status(404).send("File not found"))
+      .pipe(res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Download failed");
   }
 };
