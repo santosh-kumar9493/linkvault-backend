@@ -7,6 +7,7 @@ function base(req) {
   return `https://${req.headers.host}`;
 }
 
+// ================= GET CONTENT =================
 exports.getContent = async (req, res) => {
   try {
     const content = await Content.findOne({ linkId: req.params.linkId });
@@ -24,11 +25,9 @@ exports.getContent = async (req, res) => {
       if (!ok) return res.status(403).json({ error: "Wrong password" });
     }
 
-    // Increase view count
     content.viewCount += 1;
     await content.save();
 
-    // One-time view → delete after first read
     if (content.oneTimeView && content.viewCount > 1) {
       await Content.deleteOne({ _id: content._id });
       return res.status(410).json({ error: "Link expired" });
@@ -55,10 +54,11 @@ exports.getContent = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch content" });
+    res.status(500).json({ error: "Failed" });
   }
 };
 
+// ================= PREVIEW FILE =================
 exports.previewFile = async (req, res) => {
   try {
     const content = await Content.findOne({ linkId: req.params.linkId });
@@ -74,10 +74,9 @@ exports.previewFile = async (req, res) => {
       .collection("uploads.files")
       .findOne({ _id: new ObjectId(content.filePath) });
 
-    res.setHeader(
-      "Content-Type",
-      fileDoc?.contentType || "application/octet-stream"
-    );
+    const mime = fileDoc?.contentType || "application/pdf";
+
+    res.setHeader("Content-Type", mime);
     res.setHeader("Content-Disposition", "inline");
 
     bucket
@@ -90,6 +89,7 @@ exports.previewFile = async (req, res) => {
   }
 };
 
+// ================= DOWNLOAD FILE =================
 exports.downloadFile = async (req, res) => {
   try {
     const content = await Content.findOne({ linkId: req.params.linkId });
