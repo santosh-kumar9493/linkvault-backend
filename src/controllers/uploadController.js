@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
 
 exports.upload = async (req, res) => {
   try {
-    const { text, expiryOption, password, oneTimeView } = req.body;
+    const { text, expiryOption, oneTimeView, password } = req.body;
 
     if (!text && !req.file)
       return res.status(400).json({ error: "Text or file required" });
@@ -49,11 +49,12 @@ exports.upload = async (req, res) => {
       expiresAt,
       passwordHash,
       oneTimeView: oneTimeView === "true",
+      viewCount: 0,
     });
 
     res.json({ linkId, expiresAt });
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Upload failed" });
   }
 };

@@ -15,7 +15,7 @@ const ContentSchema = new mongoose.Schema(
 
     passwordHash: { type: String, default: null },
 
-    // NEW FEATURES
+    // View once feature
     oneTimeView: { type: Boolean, default: false },
     viewCount: { type: Number, default: 0 },
   },

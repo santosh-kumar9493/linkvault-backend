@@ -7,7 +7,6 @@ function base(req) {
   return `https://${req.headers.host}`;
 }
 
-// ================= GET CONTENT =================
 exports.getContent = async (req, res) => {
   try {
     const content = await Content.findOne({ linkId: req.params.linkId });
@@ -25,13 +24,15 @@ exports.getContent = async (req, res) => {
       if (!ok) return res.status(403).json({ error: "Wrong password" });
     }
 
-    content.viewCount += 1;
-    await content.save();
-
-    if (content.oneTimeView && content.viewCount > 1) {
+    // If one-time and already viewed → expired
+    if (content.oneTimeView && content.viewCount >= 1) {
       await Content.deleteOne({ _id: content._id });
       return res.status(410).json({ error: "Link expired" });
     }
+
+    // Increase view count
+    content.viewCount += 1;
+    await content.save();
 
     if (content.type === "text") {
       return res.json({
@@ -57,6 +58,7 @@ exports.getContent = async (req, res) => {
     res.status(500).json({ error: "Failed" });
   }
 };
+
 
 // ================= PREVIEW FILE =================
 exports.previewFile = async (req, res) => {
