@@ -3,7 +3,7 @@ const generateId = require("../utils/generateId");
 const mongoose = require("mongoose");
 const { GridFSBucket } = require("mongodb");
 
-const DEV_MODE = true; // set false before submission
+const DEV_MODE = process.env.DEV_MODE === "true";
 
 exports.upload = async (req, res) => {
   try {
@@ -23,6 +23,11 @@ exports.upload = async (req, res) => {
       expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     } else if (expiryOption === "24h") {
       expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    } else if (expiryOption === "custom" && customExpiry) {
+      const d = new Date(customExpiry);
+      if (!isNaN(d.getTime()) && d > new Date()) {
+        expiresAt = d;
+      }
     }
 
     let fileId = null;
@@ -32,16 +37,12 @@ exports.upload = async (req, res) => {
         bucketName: "uploads",
       });
 
-      const uploadStream = bucket.openUploadStream(req.file.originalname);
-
-      uploadStream.end(req.file.buffer);
-
-      await new Promise((resolve, reject) => {
-        uploadStream.on("finish", resolve);
+      fileId = await new Promise((resolve, reject) => {
+        const uploadStream = bucket.openUploadStream(req.file.originalname);
+        uploadStream.on("finish", () => resolve(uploadStream.id));
         uploadStream.on("error", reject);
+        uploadStream.end(req.file.buffer);
       });
-
-      fileId = uploadStream.id;
     }
 
     const content = await Content.create({
@@ -53,8 +54,9 @@ exports.upload = async (req, res) => {
       expiresAt,
     });
 
+    // IMPORTANT: return only linkId
     res.json({
-      link: `${process.env.BASE_URL}/content/${content.linkId}`,
+      linkId: content.linkId,
       expiresAt,
     });
   } catch (err) {
