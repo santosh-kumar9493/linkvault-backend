@@ -42,12 +42,16 @@ exports.previewFile = async (req, res) => {
 
     const stream = bucket.openDownloadStream(new ObjectId(content.filePath));
 
+    // Set generic content type (browser can preview)
+    res.setHeader("Content-Type", "application/octet-stream");
+
     stream.on("error", () => res.status(404).send("File not found"));
     stream.pipe(res);
   } catch {
     res.status(500).send("Preview failed");
   }
 };
+
 
 exports.downloadFile = async (req, res) => {
   try {
@@ -59,6 +63,7 @@ exports.downloadFile = async (req, res) => {
       "Content-Disposition",
       `attachment; filename="${content.originalName}"`
     );
+    res.setHeader("Content-Type", "application/octet-stream");
 
     const bucket = new GridFSBucket(mongoose.connection.db, {
       bucketName: "uploads",
@@ -72,3 +77,4 @@ exports.downloadFile = async (req, res) => {
     res.status(500).send("Download failed");
   }
 };
+
