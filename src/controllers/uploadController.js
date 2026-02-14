@@ -2,33 +2,22 @@ const Content = require("../models/Content");
 const generateId = require("../utils/generateId");
 const mongoose = require("mongoose");
 const { GridFSBucket } = require("mongodb");
-
-const DEV_MODE = process.env.DEV_MODE === "true";
+const bcrypt = require("bcryptjs");
 
 exports.upload = async (req, res) => {
   try {
-    const { text, expiryOption, customExpiry } = req.body;
+    const { text, expiryOption, password, oneTimeView } = req.body;
 
-    if (!text && !req.file) {
+    if (!text && !req.file)
       return res.status(400).json({ error: "Text or file required" });
-    }
 
     const linkId = generateId();
 
     let expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    if (DEV_MODE && expiryOption === "10s") {
-      expiresAt = new Date(Date.now() + 10 * 1000);
-    } else if (expiryOption === "1h") {
+    if (expiryOption === "1h")
       expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    } else if (expiryOption === "24h") {
+    if (expiryOption === "24h")
       expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    } else if (expiryOption === "custom" && customExpiry) {
-      const d = new Date(customExpiry);
-      if (!isNaN(d.getTime()) && d > new Date()) {
-        expiresAt = d;
-      }
-    }
 
     let fileId = null;
 
@@ -38,12 +27,18 @@ exports.upload = async (req, res) => {
       });
 
       fileId = await new Promise((resolve, reject) => {
-        const uploadStream = bucket.openUploadStream(req.file.originalname);
-        uploadStream.on("finish", () => resolve(uploadStream.id));
-        uploadStream.on("error", reject);
-        uploadStream.end(req.file.buffer);
+        const stream = bucket.openUploadStream(req.file.originalname, {
+          contentType: req.file.mimetype,
+        });
+        stream.on("finish", () => resolve(stream.id));
+        stream.on("error", reject);
+        stream.end(req.file.buffer);
       });
     }
+
+    let passwordHash = null;
+    if (password && password.trim())
+      passwordHash = await bcrypt.hash(password, 10);
 
     const content = await Content.create({
       linkId,
@@ -52,15 +47,13 @@ exports.upload = async (req, res) => {
       filePath: fileId,
       originalName: req.file ? req.file.originalname : null,
       expiresAt,
+      passwordHash,
+      oneTimeView: oneTimeView === "true",
     });
 
-    // IMPORTANT: return only linkId
-    res.json({
-      linkId: content.linkId,
-      expiresAt,
-    });
-  } catch (err) {
-    console.error(err);
+    res.json({ linkId, expiresAt });
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "Upload failed" });
   }
 };

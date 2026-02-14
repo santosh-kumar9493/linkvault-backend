@@ -1,43 +1,63 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
+const morgan = require("morgan");
+const rateLimit = require("express-rate-limit");
+
 const connectDB = require("./config/db");
-const runCleanup = require("./jobs/cleanup");
+
+const uploadRoutes = require("./routes/uploadRoutes");
+const contentRoutes = require("./routes/contentRoutes");
 
 const app = express();
 
-connectDB();
-connectDB().then(() => {
-  runCleanup();
+app.set("trust proxy", 1);
+
+// Logging
+app.use(morgan("combined"));
+
+// Rate limiting (100 req / 15 min per IP)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
+app.use(limiter);
 
-
+// CORS
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST"],
-    allowedHeaders: ["Content-Type"],
   })
 );
+
 app.use(express.json());
 
+// Health endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    time: new Date().toISOString(),
+  });
+});
+
+// Routes
+app.use("/api/upload", uploadRoutes);
+app.use("/content", contentRoutes);
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
 
-app.set("trust proxy", 1);
-
-app.use((req, res, next) => {
-  if (req.headers["x-forwarded-proto"] !== "https") {
-    return res.redirect(`https://${req.headers.host}${req.url}`);
-  }
-  next();
+connectDB().then(() => {
+  app.listen(PORT, "0.0.0.0", () =>
+    console.log(`Server running on ${PORT}`)
+  );
 });
-
-app.get("/", (req, res) => {
-  res.send("LinkVault API running");
-});
-
-app.use("/api/upload", require("./routes/uploadRoutes"));
-app.use("/content", require("./routes/contentRoutes"));
-

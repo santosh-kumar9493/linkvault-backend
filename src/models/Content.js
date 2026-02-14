@@ -1,25 +1,25 @@
 const mongoose = require("mongoose");
 
-const ContentSchema = new mongoose.Schema({
-  linkId: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true,
+const ContentSchema = new mongoose.Schema(
+  {
+    linkId: { type: String, required: true, unique: true },
+
+    type: { type: String, enum: ["text", "file"], required: true },
+
+    text: { type: String, default: null },
+
+    filePath: { type: mongoose.Schema.Types.ObjectId, default: null },
+    originalName: { type: String, default: null },
+
+    expiresAt: { type: Date, required: true },
+
+    passwordHash: { type: String, default: null },
+
+    // NEW FEATURES
+    oneTimeView: { type: Boolean, default: false },
+    viewCount: { type: Number, default: 0 },
   },
-  type: {
-    type: String,
-    enum: ["text", "file"],
-    required: true,
-  },
-  text: String,
-  filePath: String,
-  originalName: String,
-  expiresAt: {
-    type: Date,
-    required: true,
-    index: true,
-  },
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("Content", ContentSchema);
